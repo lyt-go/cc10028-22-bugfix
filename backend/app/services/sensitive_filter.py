@@ -74,9 +74,9 @@ class SensitiveFilterService(BaseModuleService):
             except re.error:
                 continue
 
-        # 写入过滤日志
+        # 写入过滤日志（追加型审计日志，保留每次命中历史）
         if hits:
-            self._write_jsonl(
+            self._append_jsonl(
                 self._data_dir("filters") / "hit_log.jsonl",
                 [{"text_hash": self._compute_checksum(text), "hit_count": len(hits), "at": time.time()}]
             )

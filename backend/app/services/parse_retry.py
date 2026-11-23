@@ -90,8 +90,8 @@ class ParseRetryService(BaseModuleService):
             for task in tasks:
                 if task.get("重采编号") == retry_id:
 # 数据产物：重试用尽边界归档记录标记放弃状态并归档数据
-                    # 从检查点恢复游标
-                    cp_name = f"retry_{retry_id}"
+                    # 从检查点恢复游标；按批次+重采编号隔离，避免不同批次的同名重采互相计数
+                    cp_name = f"retry_{task.get('原始批次', '')}_{retry_id}"
                     cp = self._read_checkpoint(cp_name) or {"retry_id": retry_id, "attempts": 0, "offset": 0}
 
                     cp["attempts"] = cp.get("attempts", 0) + 1
@@ -112,11 +112,10 @@ class ParseRetryService(BaseModuleService):
                     task["恢复游标"] = str(cp["offset"] + 100)
                     self._write_checkpoint(cp_name, cp)
 
-                    # 回写任务状态
-                    import json
-                    with open(rf, "w", encoding="utf-8") as f:
-                        for t in tasks:
-                            f.write(json.dumps(t, ensure_ascii=False, default=str) + "\n")
+                    # 回写任务状态（整文件原子替换，重启时不会读到半截清单）
+                    self._write_jsonl(rf, [
+                        {**t, "status": t.get("status", "")} for t in tasks
+                    ])
 
                     return {
                         "retry_id": retry_id,

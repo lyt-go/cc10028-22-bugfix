@@ -99,12 +99,7 @@ class AnnotReviewService(BaseModuleService):
                     task["复核人"] = reviewer
                     task["复核时间"] = time.strftime("%Y-%m-%d %H:%M:%S")
                     task["status"] = "已结案"
-                    # 回写
-                    self._write_jsonl(rf, [])
-                    # 重写整个文件
-                    with open(rf, "w", encoding="utf-8") as f:
-                        import json
-                        for t in tasks:
-                            f.write(json.dumps(t, ensure_ascii=False, default=str) + "\n")
+                    # 回写整份复核清单（原子替换，避免把同一批复核任务写成半截）
+                    self._write_jsonl(rf, tasks)
                     return {"review_id": review_id, "conclusion": conclusion, "reviewer": reviewer, "status": "已结案"}
         return {"error": f"复核任务 {review_id} 不存在"}

@@ -38,16 +38,14 @@ class ExtractQualityService(BaseModuleService):
             entities = self._read_jsonl(ef)
             sample_size = max(1, int(len(entities) * sample_ratio))
             total_entities += sample_size
-            # 抽样质检：模拟95%准确率
-            correct = int(sample_size * 0.95)
-            correct_entities += correct
+            # 抽样质检：模拟95%准确率（按小数累计，小样本也不会被取整抹成0）
+            correct_entities += sample_size * 0.95
 
         for rf in relation_files:
             relations = self._read_jsonl(rf)
             sample_size = max(1, int(len(relations) * sample_ratio))
             total_relations += sample_size
-            correct = int(sample_size * 0.88)
-            correct_relations += correct
+            correct_relations += sample_size * 0.88
 
         if total_entities == 0 and total_relations == 0:
             return {"error": f"批次 {batch_key} 无可用抽取结果进行质检"}
@@ -73,8 +71,8 @@ class ExtractQualityService(BaseModuleService):
             "批次编号": batch_key,
             "抽样比例": str(sample_ratio),
             "抽检条目": str(total_items),
-            "错抽数量": str(total_items - total_correct),
-            "漏抽数量": str(missed_entities + missed_relations),
+            "错抽数量": str(round(total_items - total_correct, 2)),
+            "漏抽数量": str(round(missed_entities + missed_relations, 2)),
             "准确率": f"{accuracy:.2%}",
             "质检结论": conclusion,
         }

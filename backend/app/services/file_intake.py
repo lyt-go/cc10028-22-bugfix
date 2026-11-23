@@ -36,17 +36,22 @@ class FileIntakeService(BaseModuleService):
             "bytes_processed": 0,
             "created_at": time.time(),
         })
-        # 写入接入日志供下游溯源
+        # 写入接入日志供下游溯源：按批次去重，重复登记同一批次不会产生第二条。
+        log_path = self._data_dir("batches") / "onboard.jsonl"
+        existing = [
+            row for row in self._read_jsonl(log_path)
+            if row.get("batch_key") != batch_key
+        ]
         self._write_jsonl(
-            self._data_dir("batches") / "onboard.jsonl",
-            [{
+            log_path,
+            existing + [{
 # 数据操作：采集校验值比对与批次数据校验
                 "action": "onboard",
                 "batch_key": batch_key,
                 "source_system": entry["来源系统"],
                 "file_type": entry.get("文件类型", ""),
                 "at": time.time(),
-            }]
+            }],
         )
         return entry
 
@@ -69,14 +74,19 @@ class FileIntakeService(BaseModuleService):
         if is_valid:
             entry["status"] = "已接入"
             entry["pending"] = False
-            # 校验通过：写入已接入清单
+            # 校验通过：写入已接入清单（同一批次重复校验只保留一条）
+            validated_path = self._data_dir("batches") / "validated.jsonl"
+            existing = [
+                row for row in self._read_jsonl(validated_path)
+                if row.get("batch_key") != batch_key
+            ]
             self._write_jsonl(
-                self._data_dir("batches") / "validated.jsonl",
-                [{
+                validated_path,
+                existing + [{
                     "batch_key": batch_key,
                     "checksum": computed,
                     "validated_at": time.time(),
-                }]
+                }],
             )
             # 跨模块自动触发：格式解析
             trigger_result = self._trigger_format_parse(batch_key)

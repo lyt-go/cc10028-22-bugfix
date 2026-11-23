@@ -125,13 +125,26 @@ class ResultDeliverService(BaseModuleService):
             for r in self._read_jsonl(rf):
                 items.append({"type": "relation", "source": str(rf), "data": r})
 
-        # 收集向量
-        vector_files = sorted(self._data_dir("vectors").glob(f"{doc_id}*.jsonl"))
-        for vf in vector_files:
-            for v in self._read_jsonl(vf):
-                items.append({"type": "vector", "source": str(vf), "data": {
+        # 收集向量：优先按当前向量代次清单取，避免把历史代次文件重复算进交付
+        vector_files = sorted(self._data_dir("vectors").glob(f"{doc_id}*_vectors.jsonl"))
+        seen_vectors: set[str] = set()
+        active_entry = self._active_generation("vectors", f"{doc_id}_parsed")
+        active_rows = self._read_generation_manifest(active_entry) if active_entry else None
+        if active_rows is not None:
+            vector_sources = [active_rows]
+        else:
+            vector_sources = [self._read_jsonl(vf) for vf in vector_files]
+        for rows in vector_sources:
+            for v in rows:
+                chunk_id = str(v.get("chunk_id", ""))
+                if chunk_id and chunk_id in seen_vectors:
+                    continue
+                seen_vectors.add(chunk_id)
+                items.append({"type": "vector", "source": "vectors", "data": {
                     "chunk_id": v.get("chunk_id"),
                     "doc_id": v.get("doc_id"),
+                    "page": v.get("page"),
+                    "chunk_generation_id": v.get("chunk_generation_id"),
                     "dimension": v.get("vector_dim"),
                     "index": v.get("index"),
                 }})
